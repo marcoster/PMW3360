@@ -1,5 +1,8 @@
 # PMW3360 Module Library for Arduino
 
+This is a fork of https://github.com/SunjunKim/PMW3360
+Thanks for your effort - it was a great point to start my own mouse development (link following, when I know something is working fine ;-)
+
 This library allows an Arduino board to easily communicate with PMW3360 Module.
 This library is designed for https://www.tindie.com/products/jkicklighter/pmw3360-motion-sensor/
 However, other setup will also work (e.g., https://easyeda.com/Justice/New_Project-cc5450b338fd4d55bef91ec37025ab6a).
