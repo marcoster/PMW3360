@@ -359,7 +359,22 @@ bool PMW3360::begin(unsigned int ss_pin, unsigned int CPI)
   SPI_END;
   
   delay(10);
+  // configure
+  SPI_BEGIN;
+  adns_write_reg(REG_Config2, 0x00);
+  adns_write_reg(REG_Run_Downshift, 0xff);
+  adns_write_reg(REG_Rest1_Downshift, 0xff);
+  adns_write_reg(REG_Rest2_Rate_Lower, 0x00);
+  adns_write_reg(REG_Rest2_Rate_Upper, 0x00);
+  adns_write_reg(REG_Rest3_Rate_Lower, 0x00);
+  adns_write_reg(REG_Rest3_Rate_Upper, 0x00);
+  adns_write_reg(REG_Raw_Data_Threshold, 0x0a);
+  adns_write_reg(REG_Min_SQ_Run, 0x10);
+  adns_write_reg(REG_Angle_Snap, 0x00);
+  //adns_write_reg(REG_Control, 0x60);
+  SPI_END;
   setCPI(CPI);
+
 
   return check_signature();
 }
@@ -397,6 +412,7 @@ unsigned int PMW3360::getCPI()
   return (cpival + 1)*100;
 }
 
+
 // public
 /* 
 readBurst: get one frame of motion data. 
@@ -405,10 +421,30 @@ readBurst: get one frame of motion data.
 type: PMW3360_DATA
 */
 PMW3360_DATA PMW3360::readBurst()
+{
+    return readBurst(PMW3360_BURST_DATA_SIZE);
+}
+
+
+// public
+/* 
+readBurst: get one frame of motion data. 
+# parameter
+num_read: Number of burst-bytes to be read
+
+# retrun
+type: PMW3360_DATA
+*/
+PMW3360_DATA PMW3360::readBurst(uint8_t num_read)
 {  
   unsigned long fromLast = micros() - _lastBurst;
-  byte burstBuffer[12];
-  
+  PMW3360_DATA data;
+
+  if(num_read > PMW3360_BURST_DATA_SIZE) {
+      num_read = PMW3360_BURST_DATA_SIZE;
+  }
+  num_read = constrain(num_read, PMW3360_BURST_DATA_MIN_SIZE, PMW3360_BURST_DATA_SIZE);
+
   SPI_BEGIN;
   
   if(!_inBurst || fromLast > 500*1000)
@@ -421,45 +457,21 @@ PMW3360_DATA PMW3360::readBurst()
   SPI.transfer(REG_Motion_Burst);    
   delayMicroseconds(35); // waits for tSRAD  
 
-  SPI.transfer(burstBuffer, 12); // read burst buffer
+  SPI.transfer(data.buf, num_read); // read burst buffer
   delayMicroseconds(1); // tSCLK-NCS for read operation is 120ns
 
   END_COM;
   SPI_END;
 
-  if(burstBuffer[0] & 0b111) // panic recovery, sometimes burst mode works weird.
+  if(data.motion & 0b111) // panic recovery, sometimes burst mode works weird.
   {
     _inBurst = false;
   }
 
   _lastBurst = micros();
 
-  PMW3360_DATA data;
-
-  bool motion = (burstBuffer[0] & 0x80) != 0;
-  bool surface = (burstBuffer[0] & 0x08) == 0;   // 0 if on surface / 1 if off surface
-
-  uint8_t xl = burstBuffer[2];    // dx LSB
-  uint8_t xh = burstBuffer[3];    // dx MSB
-  uint8_t yl = burstBuffer[4];    // dy LSB
-  uint8_t yh = burstBuffer[5];    // dy MSB
-  uint8_t sl = burstBuffer[10];   // shutter LSB
-  uint8_t sh = burstBuffer[11];   // shutter MSB
-  
-  int x = xh<<8 | xl;
-  int y = yh<<8 | yl;
-  unsigned int shutter = sh<<8 | sl;
-
-  data.isMotion = motion;
-  data.isOnSurface = surface;
-  data.dx = x;
-  data.dy = y;
-  data.SQUAL = burstBuffer[6];
-  data.rawDataSum = burstBuffer[7];
-  data.maxRawData = burstBuffer[8];
-  data.minRawData = burstBuffer[9];
-  data.shutter = shutter;
-
+  data.isMotion = (data.motion & 0x80) != 0;
+  data.isOnSurface = (data.motion & 0x08) == 0;   // 0 if on surface / 1 if off surface
   return data;
 }
 

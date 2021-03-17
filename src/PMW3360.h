@@ -79,6 +79,12 @@
 #define REG_Raw_Data_Burst  0x64
 #define REG_LiftCutoff_Tune2  0x65
 
+#define PMW3360_DATA_MOTION_IS_MOTION_MASK  0x80
+#define PMW3360_DATA_MOTION_ON_SURFACE_MASK 0x08
+
+#define PMW3360_BURST_DATA_SIZE 12
+#define PMW3360_BURST_DATA_MIN_SIZE 6
+
 /*
 Raw burst data structure: 
   BYTE[00] = Motion    = if the 7th bit is 1, a motion is detected.
@@ -99,10 +105,11 @@ Raw burst data structure:
   BYTE[11] = Shutter_Lower     = Shutter MSB, Shutter = shutter is adjusted to keep the average raw data values within normal operating ranges
 
 Struct description
+- PMW3360_DATA.buf           : uint8_t[12], raw motion data
 - PMW3360_DATA.isMotion      : bool, True if a motion is detected. 
 - PMW3360_DATA.isOnSurface   : bool, True when a chip is on a surface 
-- PMW3360_DATA.dx, data.dy   : integer, displacement on x/y directions.
-- PMW3360_DATA.SQUAL         : byte, Surface Quality register, max 0x80
+- PMW3360_DATA.dx, dy        : integer, displacement on x/y directions.
+- PMW3360_DATA.squal         : byte, Surface Quality register, max 0x80
                        * Number of features on the surface = SQUAL * 8
 - PMW3360_DATA.rawDataSum    : byte, It reports the upper byte of an 18‐bit counter 
                        which sums all 1296 raw data in the current frame;
@@ -114,16 +121,23 @@ Struct description
 */
 struct PMW3360_DATA
 {
- bool isMotion;        // True if a motion is detected. 
- bool isOnSurface;     // True when a chip is on a surface 
- int dx;               // displacement on x directions. Unit: Count. (CPI * Count = Inch value)
- int dy;               // displacement on y directions.
- byte SQUAL;           // Surface Quality register, max 0x80. Number of features on the surface = SQUAL * 8
- byte rawDataSum;      // It reports the upper byte of an 18‐bit counter which sums all 1296 raw data in the current frame; * Avg value = Raw_Data_Sum * 1024 / 1296
- byte maxRawData;      // Max raw data value in current frame, max=127
- byte minRawData;      // Min raw data value in current frame, max=127
- unsigned int shutter; // unit: clock cycles of the internal oscillator. shutter is adjusted to keep the average raw data values within normal operating ranges.
-}; 
+    union {
+        uint8_t buf[PMW3360_BURST_DATA_SIZE];
+        struct {
+            uint8_t motion;
+            uint8_t observation;
+            int16_t dx;
+            int16_t dy;
+            uint8_t squal;
+            uint8_t rawDataSum;
+            uint8_t maxRawData;
+            uint8_t minRawData;
+            uint16_t shutter;
+        };
+    };
+    bool isMotion;
+    bool isOnSurface;
+};
 
 class PMW3360
 {
@@ -136,6 +150,7 @@ public:
   // setCPI: get CPI value (it does read CPI register from the module)
   unsigned int getCPI();
   PMW3360_DATA readBurst();
+  PMW3360_DATA readBurst(uint8_t);
   byte readReg(byte reg_addr);
   void writeReg(byte reg_addr, byte data);
   void prepareImage();
